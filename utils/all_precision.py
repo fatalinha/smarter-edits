@@ -40,93 +40,56 @@ def compute_metrics(y_true, y_pred, label):
     print(f"Avg Precision:  {avg_precision:.3f}")
     print(f"AUC:       {auc_score:.3f}")
 
-directory_path = "." # Assuming files are in the current directory for this example
+directory_path_oracle = "human_spans/human_spans/"
+import sys
+directory_path_gemba = "output"
 
-# --- Oracle vs Gemba ---
-y_true_gemba = []
-y_pred_gemba = []
+# --- Oracle vs Various Prediction Files ---
+y_true_dict = {}
+y_pred_dict = {}
+file_types = [
+    ("_all.txt", "all"),
+    ("_all_long.txt", "all_long"),
+    ("_edits.txt", "edits"),
+    ("_edited_errors.txt", "edited_errors"),
+]
 
-oracle_files = sorted([f for f in os.listdir(directory_path) if f.endswith("_oracle_input.txt")])
-gemba_files = sorted([f for f in os.listdir(directory_path) if f.endswith(".gemba")])
+oracle_files = sorted([f for f in os.listdir(directory_path_oracle) if f.endswith("_oracle_input.txt")])
 
-file_pairs_gemba = []
-for oracle_file in oracle_files:
-    base_name = oracle_file.replace("_oracle_input.txt", "")
-    gemba_file = base_name + ".gemba"
-    if gemba_file in gemba_files:
-        file_pairs_gemba.append((os.path.join(directory_path, oracle_file), os.path.join(directory_path, gemba_file)))
-    else:
-        print(f"Warning: No matching .gemba file found for {oracle_file}")
-
-if not file_pairs_gemba:
-    print("No matching file pairs found for gemba. Please ensure your directory contains _oracle_input.txt and .gemba files.")
-else:
-    for human_file_path, auto_file_path in file_pairs_gemba:
-        print(f"Processing (oracle vs gemba): {os.path.basename(human_file_path)} and {os.path.basename(auto_file_path)}")
+for suffix, label in file_types:
+    y_true = []
+    y_pred = []
+    pred_files = sorted([f for f in os.listdir(directory_path_gemba) if f.endswith(suffix)])
+    file_pairs = []
+    for oracle_file in oracle_files:
+        base_name = oracle_file.replace("_oracle_input.txt", "")
+        pred_file = base_name + suffix
+        if pred_file in pred_files:
+            file_pairs.append((os.path.join(directory_path_oracle, oracle_file), os.path.join(directory_path_gemba, pred_file)))
+    if not file_pairs:
+        print(f"No matching file pairs found for {label}. Please ensure your directory contains _oracle_input.txt and {suffix} files.")
+        continue
+    for human_file_path, pred_file_path in file_pairs:
         try:
             with open(human_file_path, "r", encoding="utf-8") as hf, \
-                 open(auto_file_path, "r", encoding="utf-8") as af:
-                for human_line, auto_line in zip(hf, af):
+                 open(pred_file_path, "r", encoding="utf-8") as pf:
+                for human_line, pred_line in zip(hf, pf):
                     try:
                         _, human_target = map(str.strip, human_line.split("|||", 1))
-                        _, auto_target = map(str.strip, auto_line.split("|||", 1))
+                        _, pred_target = map(str.strip, pred_line.split("|||", 1))
                     except ValueError:
                         continue
                     human_tokens = extract_labels(human_target)
-                    auto_tokens = extract_labels(auto_target)
+                    pred_tokens = extract_labels(pred_target)
                     words_human = [w for w, _ in human_tokens]
-                    words_auto = [w for w, _ in auto_tokens]
-                    if words_human != words_auto:
+                    words_pred = [w for w, _ in pred_tokens]
+                    if words_human != words_pred:
                         continue
-                    y_true_gemba.extend([lbl for _, lbl in human_tokens])
-                    y_pred_gemba.extend([lbl for _, lbl in auto_tokens])
+                    y_true.extend([lbl for _, lbl in human_tokens])
+                    y_pred.extend([lbl for _, lbl in pred_tokens])
         except FileNotFoundError:
-            print(f"Error: One of the files not found - {human_file_path} or {auto_file_path}")
+            print(f"Error: One of the files not found - {human_file_path} or {pred_file_path}")
         except Exception as e:
-            print(f"An error occurred while processing {human_file_path} and {auto_file_path}: {e}")
+            print(f"An error occurred while processing {human_file_path} and {pred_file_path}: {e}")
+    compute_metrics(y_true, y_pred, f"oracle vs {label}")
 
-compute_metrics(y_true_gemba, y_pred_gemba, "oracle vs gemba")
-
-# --- Oracle vs Supervised ---
-y_true_sup = []
-y_pred_sup = []
-
-supervised_files = sorted([f for f in os.listdir(directory_path) if f.endswith("_supervised_input.txt")])
-
-file_pairs_sup = []
-for oracle_file in oracle_files:
-    base_name = oracle_file.replace("_oracle_input.txt", "")
-    sup_file = base_name + "_supervised_input.txt"
-    if sup_file in supervised_files:
-        file_pairs_sup.append((os.path.join(directory_path, oracle_file), os.path.join(directory_path, sup_file)))
-    else:
-        print(f"Warning: No matching _supervised_input.txt file found for {oracle_file}")
-
-if not file_pairs_sup:
-    print("No matching file pairs found for supervised. Please ensure your directory contains _oracle_input.txt and _supervised_input.txt files.")
-else:
-    for human_file_path, sup_file_path in file_pairs_sup:
-        print(f"Processing (oracle vs supervised): {os.path.basename(human_file_path)} and {os.path.basename(sup_file_path)}")
-        try:
-            with open(human_file_path, "r", encoding="utf-8") as hf, \
-                 open(sup_file_path, "r", encoding="utf-8") as sf:
-                for human_line, sup_line in zip(hf, sf):
-                    try:
-                        _, human_target = map(str.strip, human_line.split("|||", 1))
-                        _, sup_target = map(str.strip, sup_line.split("|||", 1))
-                    except ValueError:
-                        continue
-                    human_tokens = extract_labels(human_target)
-                    sup_tokens = extract_labels(sup_target)
-                    words_human = [w for w, _ in human_tokens]
-                    words_sup = [w for w, _ in sup_tokens]
-                    if words_human != words_sup:
-                        continue
-                    y_true_sup.extend([lbl for _, lbl in human_tokens])
-                    y_pred_sup.extend([lbl for _, lbl in sup_tokens])
-        except FileNotFoundError:
-            print(f"Error: One of the files not found - {human_file_path} or {sup_file_path}")
-        except Exception as e:
-            print(f"An error occurred while processing {human_file_path} and {sup_file_path}: {e}")
-
-compute_metrics(y_true_sup, y_pred_sup, "oracle vs supervised")
