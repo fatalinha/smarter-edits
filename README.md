@@ -31,6 +31,7 @@ We investigate whether LLM-derived error highlights and automatic post-editing (
 ```bibtex
 @inproceedings{smartedits2026,
   title     = {Smarter Edits? Post-editing with Error Highlights and Translation Suggestions},
+  author    = {van Tellingen, Fleur V.J. and  Ranka, Gautam and Zugcic, Dora and van der Wal, Joyce and Camasta, Andrea and  Guerra, Livio and Karakanta, Alina},
   booktitle = {Proceedings of EAMT 2026},
   year      = {2026}
 }
